@@ -1,36 +1,75 @@
-# Tez Lug‘at
+# Edu-AF — Education Center ERP/CRM
 
-Uzbek tilidagi inglizcha so'z yodlash platformasi: yozib recall qilish, SM-2 spaced repetition, talaffuz tinglash/tekshirish, mini-o'yinlar, dashboard, JSON backup.
+Web-based ERP/CRM for education centers: students, groups, schedule, attendance, payments, and automatic absent SMS.
 
 ## Stack
-- Next.js App Router + TypeScript + Tailwind
+- Next.js 14 (App Router) + TypeScript
 - Prisma + PostgreSQL
-- NextAuth (Email magic link + email/parol)
+- Session auth (NextAuth compatible models)
+- SMS abstraction (Mock + HTTP provider adapter)
+- Redis-ready architecture for queue worker
 
-## Ishga tushirish
-1. `npm install`
-2. `.env.example` dan `.env` yarating.
-3. `npx prisma migrate dev --name init`
-4. `npm run prisma:seed`
-5. `npm run dev`
+## 1) ER diagram / data model
+See `docs/architecture.md` (Mermaid ER and business workflow).
 
-Demo login: `demo@tezlugat.uz` / `demo12345`
+## 2) Routes / pages list
+See `docs/architecture.md` section **Route/Page Map**.
 
-## Deploy (Vercel)
-- Vercel project yarating.
-- `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, email/Azure env larni kiriting.
-- Build command: `npm run build`.
+## 3) Database migrations
+```bash
+npm install
+cp .env.example .env
+npx prisma migrate dev --name erp_init
+npm run prisma:seed
+```
 
-## Funksiyalar
-- So'z qo'shish (single, CSV/TSV)
-- Review oqimi: UZ -> EN typed answer + grade
-- Queue: due first, aks holda hardest first
-- SpeechSynthesis bilan tinglash
-- Web Speech API basic talaffuz tekshirish
-- (Ixtiyoriy) Azure pro endpoint
-- Dashboard: total/due/mastered/streak + chart
-- JSON export/import
+## 4) Backend endpoints (MVP)
+- `GET/POST /api/v1/students`
+- `POST /api/v1/attendance`
+- `GET/POST /api/v1/payments`
 
-## Maxfiylik
-- Mikrofon audio default saqlanmaydi.
-- Faqat Pro rejimida foydalanuvchi ruxsati bo'lsa saqlash mumkin (`storeAudioForPro`).
+OpenAPI spec: `docs/openapi.yaml`.
+
+## 5) Frontend pages
+Current repository includes existing Next.js pages; ERP page map and planned pages are documented in `docs/architecture.md`.
+
+## 6) Attendance -> SMS workflow
+Implemented in `lib/erp/attendance-service.ts`:
+- save attendance
+- detect ABSENT
+- render template variables
+- enforce idempotency (`lesson + student + recipient`)
+- queue log + send via provider
+- status lifecycle: `PENDING -> SENT|RETRYING|FAILED`
+
+## 7) Tests
+```bash
+npm test
+```
+Included tests cover:
+- SMS provider behavior
+- attendance -> sms trigger and idempotency logic
+- role-based permission checks
+
+## 8) Docker run
+```bash
+docker compose up --build
+```
+
+## Environment variables
+- `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/eduaf?schema=public`
+- `AUTH_SECRET=...`
+- `AUTH_URL=http://localhost:3000`
+- `SMS_PROVIDER_NAME=mock`
+- `SMS_API_URL=`
+- `SMS_API_KEY=`
+- `SMS_SENDER_ID=EDUAF`
+
+## SMS provider settings model (`settings`)
+- `provider_name`
+- `api_url`
+- `api_key/secret`
+- `sender_id`
+- `test_mode`
+
+This keeps provider integration pluggable for local telecom/A2P channels.

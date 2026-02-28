@@ -7,90 +7,249 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum GroupStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum SmsStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+}
+
+enum PriceType {
+  MONTHLY
+  PACKAGE
+}
+
+enum RecipientMode {
+  PARENT
+  STUDENT
+  BOTH
+}
+
 model User {
   id            String        @id @default(cuid())
-  name          String?
-  email         String        @unique
+  name          String
+  phone         String        @unique
+  email         String?       @unique
   emailVerified DateTime?
   image         String?
   passwordHash  String?
+  role          UserRole
+  status        UserStatus    @default(ACTIVE)
   accounts      Account[]
   sessions      Session[]
-  cards         Card[]
-  reviewLogs    ReviewLog[]
-  settings      UserSettings?
-  streak        Streak?
+  teacher       Teacher?
+  attendance    Attendance[]  @relation("AttendanceMarker")
+  auditLogs     AuditLog[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
 
-model Card {
-  id          String      @id @default(cuid())
-  userId      String
-  en          String
-  uz          String
-  example     String
-  imageUrl    String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reviewState ReviewState?
-  reviewLogs  ReviewLog[]
+model Student {
+  id           String         @id @default(cuid())
+  firstName    String
+  lastName     String
+  studentPhone String?
+  parentPhone  String
+  address      String?
+  birthDate    DateTime?
+  notes        String?
+  status       StudentStatus  @default(ACTIVE)
+  groupLinks   GroupStudent[]
+  attendance   Attendance[]
+  payments     Payment[]
+  smsLogs      SmsLog[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
-  @@index([userId, createdAt])
+  @@index([firstName, lastName])
 }
 
-model ReviewState {
-  id           String   @id @default(cuid())
-  userId       String
-  cardId       String   @unique
-  repetitions  Int      @default(0)
-  intervalDays Int      @default(1)
-  easeFactor   Float    @default(2.5)
-  dueAt        DateTime @default(now())
-  wrongCount   Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  card         Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
-
-  @@index([userId, dueAt])
+model Teacher {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  bio       String?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groups    Group[]
+  createdAt DateTime  @default(now())
 }
 
-model ReviewLog {
-  id          String   @id @default(cuid())
-  userId      String
-  cardId      String
-  quality     Int
-  correct     Boolean
-  typedAnswer String
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  card        Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
+model Course {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  duration    Int?
+  priceType   PriceType
+  priceAmount Decimal   @db.Decimal(10, 2)
+  groups      Group[]
+  createdAt   DateTime  @default(now())
 }
 
-model UserSettings {
-  id                     String  @id @default(cuid())
-  userId                 String  @unique
-  dailyGoal              Int     @default(20)
-  pronunciationPro       Boolean @default(false)
-  azureSpeechKey         String?
-  azureSpeechRegion      String?
-  storeAudioForPro       Boolean @default(false)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-  user                   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Group {
+  id          String         @id @default(cuid())
+  courseId    String
+  teacherId   String
+  name        String
+  startDate   DateTime
+  status      GroupStatus    @default(ACTIVE)
+  maxStudents Int
+  course      Course         @relation(fields: [courseId], references: [id])
+  teacher     Teacher        @relation(fields: [teacherId], references: [id])
+  students    GroupStudent[]
+  schedules   Schedule[]
+  lessons     Lesson[]
+  payments    Payment[]
+  createdAt   DateTime       @default(now())
+
+  @@index([courseId, teacherId])
 }
 
-model Streak {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  currentStreak Int      @default(0)
-  longestStreak Int      @default(0)
-  lastReviewAt  DateTime?
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model GroupStudent {
+  id        String       @id @default(cuid())
+  groupId   String
+  studentId String
+  joinDate  DateTime     @default(now())
+  status    StudentStatus @default(ACTIVE)
+  group     Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student   Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, studentId])
+}
+
+model Schedule {
+  id        String   @id @default(cuid())
+  groupId   String
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  room      String?
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model Lesson {
+  id         String       @id @default(cuid())
+  groupId    String
+  lessonDate DateTime
+  startTime  String
+  endTime    String
+  status     GroupStatus  @default(ACTIVE)
+  group      Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  attendance Attendance[]
+  smsLogs    SmsLog[]
+
+  @@unique([groupId, lessonDate, startTime])
+  @@index([lessonDate])
+}
+
+model Attendance {
+  id             String           @id @default(cuid())
+  lessonId       String
+  studentId      String
+  status         AttendanceStatus
+  markedByUserId String
+  markedAt       DateTime         @default(now())
+  lesson         Lesson            @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student        Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  markedBy       User              @relation("AttendanceMarker", fields: [markedByUserId], references: [id])
+
+  @@unique([lessonId, studentId])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  studentId String
+  groupId   String?
+  amount    Decimal       @db.Decimal(10, 2)
+  paidAt    DateTime
+  method    PaymentMethod
+  note      String?
+  student   Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group     Group?        @relation(fields: [groupId], references: [id])
+
+  @@index([studentId, paidAt])
+}
+
+model SmsTemplate {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  text      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model SmsLog {
+  id                String    @id @default(cuid())
+  studentId         String?
+  lessonId          String?
+  toNumber          String
+  message           String
+  provider          String
+  providerMessageId String?
+  status            SmsStatus @default(PENDING)
+  errorText         String?
+  retryCount        Int       @default(0)
+  createdAt         DateTime  @default(now())
+  sentAt            DateTime?
+  student           Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  lesson            Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@unique([studentId, lessonId, toNumber])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  metaJson  Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  valueJson Json
 }
 
 model Account {

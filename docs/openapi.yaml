@@ -1,0 +1,86 @@
+openapi: 3.0.3
+info:
+  title: Edu-AF ERP CRM API
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/v1/students:
+    get:
+      summary: List students
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, parentPhone]
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                parentPhone: { type: string }
+                studentPhone: { type: string }
+      responses:
+        '201': { description: Created }
+  /api/v1/attendance:
+    post:
+      summary: Save attendance and trigger absent SMS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lessonId, markedByUserId, attendance]
+              properties:
+                lessonId: { type: string }
+                markedByUserId: { type: string }
+                forceSend: { type: boolean }
+                attendance:
+                  type: array
+                  items:
+                    type: object
+                    required: [studentId, status]
+                    properties:
+                      studentId: { type: string }
+                      status:
+                        type: string
+                        enum: [PRESENT, ABSENT, LATE, EXCUSED]
+      responses:
+        '200': { description: Saved }
+  /api/v1/payments:
+    get:
+      summary: List payments
+      parameters:
+        - in: query
+          name: studentId
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Create payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentId, amount, method]
+              properties:
+                studentId: { type: string }
+                groupId: { type: string }
+                amount: { type: number }
+                method:
+                  type: string
+                  enum: [CASH, CARD, TRANSFER]
+      responses:
+        '201': { description: Created }
